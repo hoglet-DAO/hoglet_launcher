@@ -234,6 +234,15 @@ module hoglet_core::asset_manager {
         }
     }
 
+    /// Extracts the managed TransferRef (leaving the slot empty) so it can be
+    /// exchanged for a TaxFreeCap during migration (audit10 C1a).
+    /// Aborts if the ref was already extracted or destroyed.
+    public(friend) fun extract_transfer_ref(token_address: address): TransferRef acquires ManagedFungibleAsset {
+        let asset: Object<Metadata> = object::address_to_object(token_address);
+        let managed_asset = borrow_global_mut<ManagedFungibleAsset>(object_address(&asset));
+        option::extract(&mut managed_asset.transfer_ref)
+    }
+
     public(friend) fun destroy_burn_ref(token_address: address) acquires ManagedFungibleAsset {
         let asset: Object<Metadata> = object::address_to_object(token_address);
         let managed_asset = borrow_global_mut<ManagedFungibleAsset>(object_address(&asset));

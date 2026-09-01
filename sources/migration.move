@@ -209,16 +209,22 @@ module hoglet_core::migration {
 
                     // Transfer absolute power to the DAO
                     smart_token::update_treasury_address(token_address, resource_signer, dao_address);
-                    smart_token::transfer_admin(token_address, resource_signer, dao_address);
-                    
-                    // SECURITY FIX (M-01 & M-07): Destroy leftover god-mode capabilities
-                    // EXCEPTION: transfer_ref is exchanged for a TaxFreeCap to enable tax-free internal DAO routing
+
+                    // FIX (audit10 C2): exchange the transfer_ref for a TaxFreeCap and store
+                    // it BEFORE transfer_admin enable_tax_free_routing asserts
+                    // caller == admin, which is still the resource_signer here. Doing it
+                    // after transfer_admin aborts with E_NOT_AUTHORIZED and reverts the
+                    // whole migration, permanently trapping the pool's SUPRA.
                     let transfer_ref = asset_manager::extract_transfer_ref(token_address);
                     let tax_free_cap = smart_token::enable_tax_free_routing(resource_signer, token_address, transfer_ref);
-                    
-                    // Store the TaxFreeCap in the DAO via Petra so immutable DAO modules can use it
-                    petra::store_tax_free_cap(resource_signer, tax_free_cap);
 
+                    // Store the TaxFreeCap in the DAO via Petra so immutable DAO modules can use it
+                    petra::store_tax_free_cap(resource_signer, dao_address, tax_free_cap);
+
+                    smart_token::transfer_admin(token_address, resource_signer, dao_address);
+
+                    // SECURITY FIX (M-01 & M-07): Destroy leftover god-mode capabilities
+                    // EXCEPTION: transfer_ref was exchanged for a TaxFreeCap above
                     asset_manager::destroy_burn_ref(token_address);
                 };
             } else {
