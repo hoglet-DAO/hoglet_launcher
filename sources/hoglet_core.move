@@ -365,12 +365,14 @@ module hoglet_core::hoglet_core {
         );
 
         let supra_to_receive_u64 = (supra_to_receive_u128 as u64);
-        assert!(supra_to_receive_u64 >= min_supra_out, error::out_of_range(ERROR_SLIPPAGE_TOO_HIGH));
-        
-        asset_manager::burn(token_address, sender, sell_token_amount);
-
+        // [FIX audit10 #8] Enforce slippage on the NET amount the user
+        // receives (after platform + creator fees), not on the curve output.
+        // Fees are admin-capped (<= 300 bps each), so no underflow is possible.
         let platform_fee = math64::mul_div(supra_to_receive_u64, platform_fee_bps, 10000);
         let creator_fee = math64::mul_div(supra_to_receive_u64, creator_fee_bps, 10000);
+        assert!(supra_to_receive_u64 - platform_fee - creator_fee >= min_supra_out, error::out_of_range(ERROR_SLIPPAGE_TOO_HIGH));
+
+        asset_manager::burn(token_address, sender, sell_token_amount);
 
         let supra_from_pool = pool::extract_supra(pool_address, supra_to_receive_u64);
         let platform_fee_coin = coin::extract<SupraCoin>(&mut supra_from_pool, platform_fee);
