@@ -18,6 +18,7 @@
     use hoglet_buffer::manager;
     friend hoglet_core::hoglet_core;
     use dao_factory::petra;
+    use dao_factory::tax_router;
     use dao_factory::zeal;
     use dao_factory::restore;
     use dao_factory::legacy;
@@ -65,9 +66,18 @@
             if (!primary_fungible_store::primary_store_exists(benefitiary_address, quote_obj)) {
                 primary_fungible_store::create_primary_store(benefitiary_address, quote_obj);
             };
-            // Excess collected past the curve target is returned to the beneficiary
-            // in the same quote the pool collected (no conversion needed).
-            primary_fungible_store::deposit(benefitiary_address, excess_quote);
+            // [FIX-H1] Tax-aware quotes: the excess refund routes tax-free via the
+            // quote's DAO TaxFreeCap (bypasses their own tax hooks - the smart
+            // token has dispatch registered from birth). Vanilla primary deposit
+            // would abort (sanity-abort-on-dispatch) since the hooks are already
+            // registered by design. Falls back internally for non-router quotes.
+            let dao_opt = petra::get_dao_for_token(quote_obj);
+            let beneficiary_store = primary_fungible_store::ensure_primary_store_exists(benefitiary_address, quote_obj);
+            if (option::is_some(&dao_opt)) {
+                tax_router::deposit_tax_free(*option::borrow(&dao_opt), beneficiary_store, excess_quote);
+            } else {
+                fungible_asset::deposit(beneficiary_store, excess_quote);
+            };
         };
 
         fungible_asset::amount(real_quote_reserves_mut)
@@ -267,8 +277,16 @@
         // The AMM router withdraws the seed from the resource signer's primary
         // store (smart_withdraw). Ensure the store exists and park the entire
         // collected quote there  exactly the v2 flow's coin::deposit step.
+        // [FIX-H1] Tax-aware quotes: the vanilla deposit aborts (their dispatch
+        // hooks are registered from birth) route via the quote's DAO
+        // TaxFreeCap so the parked seed stays at exact amounts.
         let quote_primary_store = primary_fungible_store::ensure_primary_store_exists(resource_addr, quote_obj);
-        fungible_asset::deposit(quote_primary_store, mut_quote);
+        let quote_dao_opt = petra::get_dao_for_token(quote_obj);
+        if (option::is_some(&quote_dao_opt)) {
+            tax_router::deposit_tax_free(*option::borrow(&quote_dao_opt), quote_primary_store, mut_quote);
+        } else {
+            fungible_asset::deposit(quote_primary_store, mut_quote);
+        };
 
         let is_meme = pool::is_meme(pool_address);
 

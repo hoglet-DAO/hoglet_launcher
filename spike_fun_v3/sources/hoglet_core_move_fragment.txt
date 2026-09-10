@@ -1,0 +1,39 @@
+    /// Distributes quote fees to the platform and dev. FA primary stores are
+    /// created on demand, so a missing store can never disrupt payouts 
+    /// preserving the anti-DoS goal of v2's [FIX-H3.1] fallback without needing
+    /// a fallback address at all.
+    /// [FIX-H2/DUPE] Each fee is deposited EXACTLY ONCE — the earlier
+    /// sequential patch double-paid the creator fee (vanilla deposit + the
+    /// tax-aware branch repeated it). Rewired: the tax-aware branch owns the
+    /// whole distribution; the non-aware branch keeps the vanilla deposits.
+    fun distribute_quote_fees_internal(
+        pool_address: address,
+        quote_obj: Object<Metadata>,
+        platform_fee_address: address,
+        platform_fee_coin: FungibleAsset,
+        creator_fee_coin: FungibleAsset
+    ) {
+        let dev_address = pool::get_dev_address(pool_address);
+
+        let quote_dao_opt = petra::get_dao_for_token(quote_obj);
+        if (option::is_some(&quote_dao_opt)) {
+            // [FIX-H2] Tax-aware quotes: fee deposits route tax-free via the
+            // quote's DAO TaxFreeCap — platform/creator receive FULL fees (their
+            // token's own tax hooks would skim the fee slices otherwise).
+            let dao_address = *option::borrow(&quote_dao_opt);
+            let dev_store = primary_fungible_store::ensure_primary_store_exists(dev_address, quote_obj);
+            tax_router::deposit_tax_free(dao_address, dev_store, creator_fee_coin);
+            let platform_store = primary_fungible_store::ensure_primary_store_exists(platform_fee_address, quote_obj);
+            tax_router::deposit_tax_free(dao_address, platform_store, platform_fee_coin);
+        } else {
+            if (!primary_fungible_store::primary_store_exists(dev_address, quote_obj)) {
+                primary_fungible_store::create_primary_store(dev_address, quote_obj);
+            };
+            primary_fungible_store::deposit(dev_address, creator_fee_coin);
+
+            if (!primary_fungible_store::primary_store_exists(platform_fee_address, quote_obj)) {
+                primary_fungible_store::create_primary_store(platform_fee_address, quote_obj);
+            };
+            primary_fungible_store::deposit(platform_fee_address, platform_fee_coin);
+        };
+    }

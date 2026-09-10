@@ -1,4 +1,4 @@
-﻿module hoglet_core::hoglet_core {
+module hoglet_core::hoglet_core {
     use std::error;
     use std::signer::address_of;
     use std::string::{String};
@@ -455,10 +455,17 @@
         );
         // Ensure the seller can receive the quote in the same tx (a user that
         // acquired tokens via transfer may never have held the quote before).
-        if (!primary_fungible_store::primary_store_exists(sender, quote_obj)) {
-            primary_fungible_store::create_primary_store(sender, quote_obj);
+        // [FIX-H2] Tax-aware quotes: the payout routes tax-free via the quote's
+        // DAO TaxFreeCap the seller receives the EXACT net asserted (their
+        // own tax hooks would skim the payout otherwise, breaking the V3-2
+        // slippage guarantee).
+        let seller_store = primary_fungible_store::ensure_primary_store_exists(sender, quote_obj);
+        let quote_dao_opt = petra::get_dao_for_token(quote_obj);
+        if (option::is_some(&quote_dao_opt)) {
+            tax_router::deposit_tax_free(*option::borrow(&quote_dao_opt), seller_store, quote_from_pool);
+        } else {
+            primary_fungible_store::deposit(sender, quote_from_pool);
         };
-        primary_fungible_store::deposit(sender, quote_from_pool);
 
         event::emit(
             TradeEvent {
@@ -932,15 +939,26 @@
         creator_fee_coin: FungibleAsset
     ) {
         let dev_address = pool::get_dev_address(pool_address);
-        if (!primary_fungible_store::primary_store_exists(dev_address, quote_obj)) {
-            primary_fungible_store::create_primary_store(dev_address, quote_obj);
-        };
-        primary_fungible_store::deposit(dev_address, creator_fee_coin);
+        let quote_dao_opt = petra::get_dao_for_token(quote_obj);
+        if (option::is_some(&quote_dao_opt)) {
+            // [FIX-H2] Tax-aware quotes: fee deposits route tax-free via the
+            // quote's DAO TaxFreeCap - platform/creator receive FULL fees.
+            let dao_address = *option::borrow(&quote_dao_opt);
+            let dev_store = primary_fungible_store::ensure_primary_store_exists(dev_address, quote_obj);
+            tax_router::deposit_tax_free(dao_address, dev_store, creator_fee_coin);
+            let platform_store = primary_fungible_store::ensure_primary_store_exists(platform_fee_address, quote_obj);
+            tax_router::deposit_tax_free(dao_address, platform_store, platform_fee_coin);
+        } else {
+            if (!primary_fungible_store::primary_store_exists(dev_address, quote_obj)) {
+                primary_fungible_store::create_primary_store(dev_address, quote_obj);
+            };
+            primary_fungible_store::deposit(dev_address, creator_fee_coin);
 
-        if (!primary_fungible_store::primary_store_exists(platform_fee_address, quote_obj)) {
-            primary_fungible_store::create_primary_store(platform_fee_address, quote_obj);
+            if (!primary_fungible_store::primary_store_exists(platform_fee_address, quote_obj)) {
+                primary_fungible_store::create_primary_store(platform_fee_address, quote_obj);
+            };
+            primary_fungible_store::deposit(platform_fee_address, platform_fee_coin);
         };
-        primary_fungible_store::deposit(platform_fee_address, platform_fee_coin);
     }
 
     fun check_and_complete_pool_internal(pool_address: address) {
@@ -953,4 +971,5 @@
         }
     }
 }
+
 

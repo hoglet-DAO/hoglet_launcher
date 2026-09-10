@@ -447,6 +447,13 @@ module hoglet_core::launch_config {
         false
     }
 
+    /// [FIX-M1/HOOK-BAIT] Public wrapper for the cross-module re-probe: hoglet's
+    /// deploy runs it per-deploy so a maker that whitelisted a clean FA cannot
+    /// graft dispatch hooks post-whitelist without aborting the deploy.
+    public fun validate_quote_is_pure_canonical_fa(admin: &signer, quote: address) {
+        assert_quote_is_pure_canonical_fa(admin, quote)
+    }
+
     inline fun assert_quote_is_pure_canonical_fa(admin: &signer, quote: address) {
         assert!(quote != @0x0, error::invalid_argument(ERROR_QUOTE_INVALID_PARAMS));
         assert!(
