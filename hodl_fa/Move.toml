@@ -1,0 +1,24 @@
+[package]
+name = "hodl"
+version = "1.0.0"
+authors = []
+
+[addresses]
+
+HOLDER = "0x1c4a5f9a687464aa481158f82f892f9a3f223b505dad30b43047f5922ed3a56d"
+hoglet_hodl = "0x1c4a5f9a687464aa481158f82f892f9a3f223b505dad30b43047f5922ed3a56d"
+
+[dev-addresses]
+
+[dependencies.SupraFramework]
+git = "https://github.com/Entropy-Foundation/aptos-core.git"
+rev = "dev"
+subdir = "aptos-move/framework/supra-framework"
+
+[dependencies.AptosToken]
+git = "https://github.com/Entropy-Foundation/aptos-core.git"
+rev = "dev"
+subdir = "aptos-move/framework/aptos-token"
+
+[dev-dependencies]
+
