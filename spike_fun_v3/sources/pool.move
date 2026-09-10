@@ -134,10 +134,13 @@ module hoglet_core::pool {
             // [V3-TAX-AWARE] Tax-free route of the quote's DAO (TaxFreeCap):
             // the credited == declared (1:1) - the counter matches exactly and the
             // curve math remains deterministic.
+            // [audit13 R-1] router proof = the pool object's signer (whitelisted
+            // in the DAO's TaxFreeRouter at migration time).
             let quote_obj = object::address_to_object<Metadata>(pool.quote_metadata);
+            let pool_signer = &object::generate_signer_for_extending(&pool.pool_extend_ref);
             let dao_opt = petra::get_dao_for_token(quote_obj);
             if (option::is_some(&dao_opt)) {
-                tax_router::deposit_tax_free(*option::borrow(&dao_opt), pool.quote_store, quote);
+                tax_router::deposit_tax_free(*option::borrow(&dao_opt), pool_signer, pool.quote_store, quote);
             } else {
                 fungible_asset::deposit(pool.quote_store, quote);
             };

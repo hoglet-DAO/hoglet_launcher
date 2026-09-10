@@ -442,7 +442,7 @@ module hoglet_core::launch_config {
         let metadata = object::address_to_object<Metadata>(quote);
         let dao_opt = petra::get_dao_for_token(metadata);
         if (option::is_some(&dao_opt)) {
-            return tax_router::has_tax_free_router(*option::borrow(&dao_opt));
+            return tax_router::has_tax_free_router(*option::borrow(&dao_opt))
         };
         false
     }

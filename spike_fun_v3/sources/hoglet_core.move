@@ -187,7 +187,20 @@ module hoglet_core::hoglet_core {
             is_meme
         );
 
-        let final_unstake_period = if (unstake_period_seconds > 0) {
+        // [FIX (audit13 R-2)] Cross-launch whitelist: when the QUOTE is an
+        // earlier launcher-DAO's smart token, THIS launch's Pool must be
+        // whitelisted in THAT DAO's TaxFreeRouter so the pool's signer-proof
+        // routes work. Gated by the launcher registry (same identity pattern
+        // as petra::activate_dao); skipped for plain-FA / SUPRA quotes.
+        let quote_obj = object::address_to_object<Metadata>(quote_address);
+        let quote_dao_opt = petra::get_dao_for_token(quote_obj);
+        if (option::is_some(&quote_dao_opt)) {
+            let quote_dao_address = *option::borrow(&quote_dao_opt);
+            if (tax_router::has_tax_free_router(quote_dao_address)) {
+                petra::add_tax_router(&resource_signer, quote_dao_address, pool_address);
+            };
+        };
+let final_unstake_period = if (unstake_period_seconds > 0) {
             // Validate deployer-supplied unstake period is within the platform-configured range.
             let (min_period, max_period) = launch_config::get_unstake_period_range();
             assert!(
@@ -462,7 +475,12 @@ module hoglet_core::hoglet_core {
         let seller_store = primary_fungible_store::ensure_primary_store_exists(sender, quote_obj);
         let quote_dao_opt = petra::get_dao_for_token(quote_obj);
         if (option::is_some(&quote_dao_opt)) {
-            tax_router::deposit_tax_free(*option::borrow(&quote_dao_opt), seller_store, quote_from_pool);
+            // [FIX-H2 + audit13 R-1]: the router proof is the launcher's
+            // shared resource account signer (whitelisted in every
+            // launcher-DAO's TaxFreeRouter at that DAO's own migration); no
+            // user can produce it.
+            let router_signer = &launch_config::get_resource_signer();
+            tax_router::deposit_tax_free(*option::borrow(&quote_dao_opt), router_signer, seller_store, quote_from_pool);
         } else {
             primary_fungible_store::deposit(sender, quote_from_pool);
         };
@@ -910,21 +928,13 @@ module hoglet_core::hoglet_core {
             return coin::coin_to_fungible_asset<SupraCoin>(supra_coins)
         };
         assert!(balance >= amount, error::invalid_argument(ERROR_INSUFFICIENT_BALANCE));
-        // [V3-TAX-AWARE] Tax-aware quotes (launcher-launched smart_tokens) route
-        // user-side withdrawals through THEIR OWN DAO's TaxFreeCap (the user owns
-        // their store - audit9 H-2): taxes do not skim the curve deposit and the
-        // amount credited lands at exact declared units.
-        // [V3-TAX-AWARE] Tax-aware quotes (launcher-launched smart_tokens) route
-        // user-side withdrawals through THEIR OWN DAO's TaxFreeCap (the user owns
-        // their store - audit9 H-2): taxes do not skim the curve deposit and the
-        // amount credited lands at exact declared units.
-        let user_store = primary_fungible_store::primary_store(sender, quote_obj);
-        let quote_dao_opt = petra::get_dao_for_token(quote_obj);
-        if (option::is_some(&quote_dao_opt)) {
-            tax_router::withdraw_tax_free(*option::borrow(&quote_dao_opt), caller, user_store, amount)
-        } else {
-            primary_fungible_store::withdraw(caller, quote_obj, amount)
-        }
+        // [FIX (audit13 R-1)] No tax-free user route: the user pays from their
+        // own store via the token's STANDARD dispatch flow. If the quote's DAO
+        // keeps its taxes off during the curve phase the leg is free; once the
+        // DAO enables them, every user pays them and bots can no longer dodge
+        // them the TaxFree routes are now reachable ONLY by the whitelisted
+        // router proof (the pool object / the launcher resource account).
+        primary_fungible_store::withdraw(caller, quote_obj, amount)
     }
 
     /// Distributes quote fees to the platform and dev. FA primary stores are
@@ -941,13 +951,14 @@ module hoglet_core::hoglet_core {
         let dev_address = pool::get_dev_address(pool_address);
         let quote_dao_opt = petra::get_dao_for_token(quote_obj);
         if (option::is_some(&quote_dao_opt)) {
-            // [FIX-H2] Tax-aware quotes: fee deposits route tax-free via the
-            // quote's DAO TaxFreeCap - platform/creator receive FULL fees.
+            // [FIX-H2 + audit13 R-1]: router proof = launcher's shared
+            // resource account signer; fees arrive FULL at dev/platform.
+            let router_signer = &launch_config::get_resource_signer();
             let dao_address = *option::borrow(&quote_dao_opt);
             let dev_store = primary_fungible_store::ensure_primary_store_exists(dev_address, quote_obj);
-            tax_router::deposit_tax_free(dao_address, dev_store, creator_fee_coin);
+            tax_router::deposit_tax_free(dao_address, router_signer, dev_store, creator_fee_coin);
             let platform_store = primary_fungible_store::ensure_primary_store_exists(platform_fee_address, quote_obj);
-            tax_router::deposit_tax_free(dao_address, platform_store, platform_fee_coin);
+            tax_router::deposit_tax_free(dao_address, router_signer, platform_store, platform_fee_coin);
         } else {
             if (!primary_fungible_store::primary_store_exists(dev_address, quote_obj)) {
                 primary_fungible_store::create_primary_store(dev_address, quote_obj);

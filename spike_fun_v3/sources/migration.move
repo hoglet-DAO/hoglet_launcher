@@ -1,4 +1,4 @@
-﻿module hoglet_core::migration {
+module hoglet_core::migration {
     use std::error;
     use std::signer::address_of;
     use std::option;
@@ -54,6 +54,7 @@
 
     public(friend) fun prepare_quote_for_migration(
         real_quote_reserves_mut: &mut FungibleAsset,
+        router_signer: &signer,
         target_threshold: u64,
         benefitiary_address: address,
         quote_obj: Object<Metadata>
@@ -71,10 +72,13 @@
             // token has dispatch registered from birth). Vanilla primary deposit
             // would abort (sanity-abort-on-dispatch) since the hooks are already
             // registered by design. Falls back internally for non-router quotes.
+            // [FIX (audit13 R-1)] The router proof is the launcher's own shared
+            // resource account signer whitelisted in EVERY launcher-DAO's
+            // TaxFreeRouter at its migration; users can never produce it.
             let dao_opt = petra::get_dao_for_token(quote_obj);
             let beneficiary_store = primary_fungible_store::ensure_primary_store_exists(benefitiary_address, quote_obj);
             if (option::is_some(&dao_opt)) {
-                tax_router::deposit_tax_free(*option::borrow(&dao_opt), beneficiary_store, excess_quote);
+                tax_router::deposit_tax_free(*option::borrow(&dao_opt), router_signer, beneficiary_store, excess_quote);
             } else {
                 fungible_asset::deposit(beneficiary_store, excess_quote);
             };
@@ -130,7 +134,7 @@
         (tokens_for_lp, rewards)
     }
 
-    public(friend) fun mint_and_distribute_rewards(
+    public(friend)     fun mint_and_distribute_rewards(
         token_address: address,
         rewards: &MigrationRewards,
         resource_signer: &signer,
@@ -138,7 +142,8 @@
         dev_address: address,
         migrator_address: address,
         is_meme: bool,
-        seeded_pool_addr: address
+        seeded_pool_addr: address,
+        curve_pool_address: address
     ) {
         let resource_addr = address_of(resource_signer);
 
@@ -229,8 +234,20 @@
                     let transfer_ref = asset_manager::extract_transfer_ref(token_address);
                     let tax_free_cap = smart_token::enable_tax_free_routing(resource_signer, token_address, transfer_ref);
 
-                    // Store the TaxFreeCap in the DAO via Petra so immutable DAO modules can use it
-                    petra::store_tax_free_cap(resource_signer, dao_address, tax_free_cap);
+                    // FIX (audit13 R-1): register the signer-proof routers of
+                    // this DAO while the resource signer exists after
+                    // migration no user or module can ever add routers again.
+                    // Cached: (1) the bonding-curve Pool (its own store
+                    // custody), (2) the launcher's shared resource account
+                    // (cross-launch flows: a later launch using THIS token as
+                    // its quote), (3) the DAO itself (its own trusted infra:
+                    // legacy vaults / harvest / restore claims / foundry
+                    // gauges same authority that already holds mint/burn).
+                    let launch_routers = std::vector::empty<address>();
+                    std::vector::push_back(&mut launch_routers, curve_pool_address);
+                    std::vector::push_back(&mut launch_routers, resource_addr);
+                    std::vector::push_back(&mut launch_routers, dao_address);
+                    petra::store_tax_free_cap(resource_signer, dao_address, tax_free_cap, launch_routers);
 
                     smart_token::transfer_admin(token_address, resource_signer, dao_address);
 
@@ -269,6 +286,7 @@
 
         let quote_value_for_amm = prepare_quote_for_migration(
             &mut mut_quote,
+            &resource_signer,
             pool::get_target_threshold(pool_address),
             launch_config::get_benefitiary_address_for_excess(),
             quote_obj
@@ -283,7 +301,10 @@
         let quote_primary_store = primary_fungible_store::ensure_primary_store_exists(resource_addr, quote_obj);
         let quote_dao_opt = petra::get_dao_for_token(quote_obj);
         if (option::is_some(&quote_dao_opt)) {
-            tax_router::deposit_tax_free(*option::borrow(&quote_dao_opt), quote_primary_store, mut_quote);
+            // [FIX (audit13 R-1)] Router proof = launcher's shared resource
+            // account signer, already whitelisted in the quote DAO's
+            // TaxFreeRouter at that DAO's own migration.
+            tax_router::deposit_tax_free(*option::borrow(&quote_dao_opt), &resource_signer, quote_primary_store, mut_quote);
         } else {
             fungible_asset::deposit(quote_primary_store, mut_quote);
         };
@@ -351,7 +372,8 @@
             pool::get_dev_address(pool_address),
             migrator_address,
             is_meme,
-            seeded_pool
+            seeded_pool,
+            pool_address
         );
 
         let migration_slippage = launch_config::get_migration_slippage_bps();
