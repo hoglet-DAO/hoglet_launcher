@@ -388,6 +388,20 @@ let final_unstake_period = if (unstake_period_seconds > 0) {
         assert!(tokens_to_receive_u64 >= min_token_out, error::out_of_range(ERROR_SLIPPAGE_TOO_HIGH));
 
         let total_quote_asset = withdraw_quote_internal(caller, quote_obj, quote_in_amount);
+
+        // [FIX (AUDIT13 #2)] The quote's dispatch hooks may skim the payment
+        // (a DAO-quote can enable its taxes via governance timelock while its
+        // token is a quote). Every downstream number MUST be derived from the
+        // amount ACTUALLY received: minting off the declared units while the
+        // curve credits the skimmed units over-emits supply and drifts the
+        // curve against the snapshot the AMM inherits at migration. With no
+        // tax active, received == declared and the math is bit-identical.
+        let received_quote = fungible_asset::amount(&total_quote_asset);
+        assert!(received_quote >= total_fees, error::invalid_argument(ERROR_AMOUNT_TOO_LOW));
+        platform_fee = math64::mul_div(received_quote, platform_fee_bps, 10000);
+        creator_fee = math64::mul_div(received_quote, creator_fee_bps, 10000);
+        let pool_input_actual = received_quote - platform_fee - creator_fee;
+
         let platform_fee_asset = fungible_asset::extract(&mut total_quote_asset, platform_fee);
         let creator_fee_asset = fungible_asset::extract(&mut total_quote_asset, creator_fee);
 
@@ -399,15 +413,21 @@ let final_unstake_period = if (unstake_period_seconds > 0) {
             creator_fee_asset
         );
 
+        let tokens_mint_u64 = (math::calculate_buy_token(
+            v_token,
+            v_quote,
+            (pool_input_actual as u128)
+        ) as u64);
+
         pool::deposit_quote(pool_address, total_quote_asset);
-        asset_manager::mint(token_address, sender, tokens_to_receive_u64);
+        asset_manager::mint(token_address, sender, tokens_mint_u64);
 
         event::emit(
             TradeEvent {
-                quote_amount: quote_to_pool_amount_u64,
+                quote_amount: pool_input_actual,
                 is_buy: true,
                 token_address,
-                token_amount: tokens_to_receive_u64,
+                token_amount: tokens_mint_u64,
                 user: sender,
                 timestamp: timestamp::now_seconds(),
             }
@@ -615,8 +635,21 @@ let final_unstake_period = if (unstake_period_seconds > 0) {
         assert!(total_cost_u64 >= min_trade_amount, error::invalid_argument(ERROR_AMOUNT_TOO_LOW));
 
         let total_quote_asset = withdraw_quote_internal(caller, quote_obj, total_cost_u64);
-        let platform_fee_asset = fungible_asset::extract(&mut total_quote_asset, (platform_fee_u128 as u64));
-        let creator_fee_asset = fungible_asset::extract(&mut total_quote_asset, (creator_fee_u128 as u64));
+
+        // [FIX (AUDIT13 #2)] Post-tax re-derivation (mirror of the buy path):
+        // fees are computed off the ACTUALLY received units; the tokens minted
+        // are re-priced from the pool input the curve will actually credit.
+        // Exact-buy semantics hold bit-identically whenever the quote's taxes
+        // are off (received == total_cost_u128); with taxes active the user
+        // receives the honest curve-equivalent of what landed.
+        let received_quote = fungible_asset::amount(&total_quote_asset);
+        let platform_fee_actual = aptos_std::math128::mul_div((received_quote as u128), (platform_fee_bps as u128), 10000);
+        let creator_fee_actual = aptos_std::math128::mul_div((received_quote as u128), (creator_fee_bps as u128), 10000);
+        let pool_input_actual = received_quote - (platform_fee_actual as u64) - (creator_fee_actual as u64);
+        assert!(pool_input_actual > 0, error::invalid_argument(ERROR_AMOUNT_TOO_LOW));
+
+        let platform_fee_asset = fungible_asset::extract(&mut total_quote_asset, (platform_fee_actual as u64));
+        let creator_fee_asset = fungible_asset::extract(&mut total_quote_asset, (creator_fee_actual as u64));
 
         distribute_quote_fees_internal(
             pool_address,
@@ -626,17 +659,24 @@ let final_unstake_period = if (unstake_period_seconds > 0) {
             creator_fee_asset
         );
 
+        let tokens_mint_u64 = (math::calculate_buy_token(
+            v_token,
+            v_quote,
+            (pool_input_actual as u128)
+        ) as u64);
+        assert!(tokens_mint_u64 > 0, error::invalid_argument(ERROR_PUMP_AMOUNT_TO_LOW));
+
         pool::deposit_quote(pool_address, total_quote_asset);
 
         let sender = address_of(caller);
-        asset_manager::mint(token_address, sender, buy_token_amount);
+        asset_manager::mint(token_address, sender, tokens_mint_u64);
 
         event::emit(
             TradeEvent {
-                quote_amount: (liquidity_cost_u128 as u64),
+                quote_amount: pool_input_actual,
                 is_buy: true,
                 token_address,
-                token_amount: buy_token_amount,
+                token_amount: tokens_mint_u64,
                 user: sender,
                 timestamp: timestamp::now_seconds(),
             }
