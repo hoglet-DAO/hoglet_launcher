@@ -21,8 +21,14 @@ module hoglet_core::hoglet_core {
     use hoglet_hodl::hodl_fa;
     use dao_factory::petra;
     use dao_factory::tax_router;
+    use dao_tokens::smart_token;
     use spike_amm::amm_router;
     use spike_amm::amm_pair;
+
+    // [FIX (AUDIT14 N-2)] The exact-price swap route only honors its
+    // "exact tokens for declared cost" semantics on tax-clean quotes; a
+    // tax-active quote degrades the received amount silently.
+    const ERROR_EXACT_SWAP_TAXED_QUOTE: u64 = 21;
 
     const ERROR_NO_AUTH: u64 = 2;
     const ERROR_PUMP_NOT_EXIST: u64 = 6;
@@ -377,16 +383,10 @@ let final_unstake_period = if (unstake_period_seconds > 0) {
 
         let (v_quote, v_token) = pool::get_reserves(pool_address);
 
-        let tokens_to_receive_u128 = math::calculate_buy_token(
-            v_token,
-            v_quote,
-            (quote_to_pool_amount_u64 as u128)
-        );
-
-        let tokens_to_receive_u64 = (tokens_to_receive_u128 as u64);
-        assert!(tokens_to_receive_u64 > 0, error::invalid_argument(ERROR_PUMP_AMOUNT_TO_LOW));
-        assert!(tokens_to_receive_u64 >= min_token_out, error::out_of_range(ERROR_SLIPPAGE_TOO_HIGH));
-
+        // [FIX (AUDIT14 N-1)] The pre-tax preview block was removed: computing
+        // the slippage guard off the DECLARED input let a tax-active quote
+        // pass min_token_out while crediting less. The asserts now bind to the
+        // honest post-withdraw mint numbers (see below).
         let total_quote_asset = withdraw_quote_internal(caller, quote_obj, quote_in_amount);
 
         // [FIX (AUDIT13 #2)] The quote's dispatch hooks may skim the payment
@@ -418,6 +418,8 @@ let final_unstake_period = if (unstake_period_seconds > 0) {
             v_quote,
             (pool_input_actual as u128)
         ) as u64);
+        assert!(tokens_mint_u64 > 0, error::invalid_argument(ERROR_PUMP_AMOUNT_TO_LOW));
+        assert!(tokens_mint_u64 >= min_token_out, error::out_of_range(ERROR_SLIPPAGE_TOO_HIGH));
 
         pool::deposit_quote(pool_address, total_quote_asset);
         asset_manager::mint(token_address, sender, tokens_mint_u64);
@@ -608,6 +610,15 @@ let final_unstake_period = if (unstake_period_seconds > 0) {
         let resource_address = launch_config::get_resource_address();
         let pool_address = pool::get_pool_address(resource_address, token_address);
         let quote_obj = get_quote_obj_internal(pool_address);
+
+        // [FIX (AUDIT14 N-2)] Exact-buy keeps its semantics ONLY on tax-clean
+        // quotes: a quote whose DAO has taxes active degrades the received
+        // amount silently (user pays while getting fewer tokens than asked).
+        // Abort BEFORE moving any funds; the normal buy route has the honest
+        // post-tax re-pricing instead.
+        if (smart_token::is_tax_active(object::object_address(&quote_obj))) {
+            abort error::invalid_state(ERROR_EXACT_SWAP_TAXED_QUOTE)
+        };
 
         assert!(!pool::is_completed(pool_address), error::invalid_state(ERROR_PUMP_COMPLETED));
         let (v_quote, v_token) = pool::get_reserves(pool_address);
