@@ -1,0 +1,18 @@
+HOGLET DAO PROPRIETARY SOURCE-AVAILABLE LICENSE
+
+Copyright (c) 2026 Hoglet DAO Contributors. All rights reserved.
+
+1. PERMITTED USE
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), strictly for the purposes of:
+a) Reading, reviewing, and auditing the source code.
+b) Compiling the Software locally for testing and security verification.
+
+2. PROHIBITED ACTIONS
+You are explicitly PROHIBITED from:
+a) Deploying this Software, or any modified version of it, to any public blockchain (Mainnet, Testnet, or Devnet) for commercial or production purposes.
+b) Using the Software to create a competing product, DAO factory, or token launcher.
+c) Sublicensing, distributing, selling, or otherwise transferring the Software or any portion thereof to third parties.
+d) Removing or altering any copyright notices or SPDX identifiers contained within the Software.
+
+3. DISCLAIMER OF LIABILITY
+THIS SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS, COPYRIGHT HOLDERS, OR HOGLET DAO CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
