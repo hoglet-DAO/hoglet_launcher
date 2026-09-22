@@ -243,6 +243,16 @@ module hoglet_core::asset_manager {
         option::extract(&mut managed_asset.transfer_ref)
     }
 
+    public(friend) fun destroy_mint_ref(token_address: address) acquires ManagedFungibleAsset {
+        let asset: Object<Metadata> = object::address_to_object(token_address);
+        let managed_asset = borrow_global_mut<ManagedFungibleAsset>(object_address(&asset));
+        managed_asset.minting_enabled = false;
+        if (option::is_some(&managed_asset.mint_ref)) {
+            let _ref = option::extract(&mut managed_asset.mint_ref);
+            // _ref is dropped
+        }
+    }
+
     public(friend) fun destroy_burn_ref(token_address: address) acquires ManagedFungibleAsset {
         let asset: Object<Metadata> = object::address_to_object(token_address);
         let managed_asset = borrow_global_mut<ManagedFungibleAsset>(object_address(&asset));

@@ -145,6 +145,18 @@ module hoglet_core::hoglet_core {
         // (Call serves as an exists+enabled guard; fields come via getters.)
         launch_config::require_quote_config(quote_address);
 
+        // [FIX (AUDIT L-03)] The HOOK-BAIT probe belongs HERE per-deploy:
+        // require_quote_config only checks exists+enabled a maker could
+        // graft dispatch hooks onto a whitelisted quote AFTER whitelisting.
+        // The probe rejects non-canonical FAs (gateway-paired) and any
+        // dispatch-hook payload, keeping the canonical-1:1 curve sealed at
+        // every deploy. Probe dust (the inert throwaway store) stays owned
+        // by the launcher resource account, never the deployer's wallet.
+        launch_config::validate_quote_is_pure_canonical_fa(
+            &launch_config::get_resource_signer(),
+            quote_address
+        );
+
         let sender = address_of(caller);
 
         let (_, deploy_fee, _, platform_fee_address) = launch_config::get_platform_fees();
@@ -888,6 +900,18 @@ let final_unstake_period = if (unstake_period_seconds > 0) {
             token_obj,
             expected_supply
         );
+    }
+
+    /// [Setup Router support] True when the token was born in this
+    /// launchpad (its curve pool exists). Foreign/heritage tokens always
+    /// answer false and never abort the DAO setup router uses this to
+    /// route launcher-born tokens through the HODL gate and heritage FAs
+    /// through petra's direct static creation.
+    #[view]
+    public fun is_launcher_project(token_address: address): bool {
+        let resource_address = launch_config::get_resource_address();
+        let pool_address = pool::get_pool_address(resource_address, token_address);
+        pool::has_pool(pool_address)
     }
 
     #[view]

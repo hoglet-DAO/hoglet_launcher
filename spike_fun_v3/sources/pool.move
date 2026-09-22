@@ -210,6 +210,14 @@ module hoglet_core::pool {
         borrow_global<Pool>(pool_address).quote_balance_internal
     }
 
+    /// [Setup Router support] Storage-existence probe that never aborts:
+    /// `exists` is INTERNAL to the defining module (friend does NOT grant
+    /// global-storage access), so the launcher exposes this one-liner for
+    /// hoglet_core::is_launcher_project to consult.
+    public fun has_pool(pool_address: address): bool {
+        exists<Pool>(pool_address)
+    }
+
     public(friend) fun set_completed(
         pool_address: address,
         snapshot_v_token: u128,

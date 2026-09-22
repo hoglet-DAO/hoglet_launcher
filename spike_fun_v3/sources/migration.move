@@ -178,6 +178,9 @@ module hoglet_core::migration {
         asset_manager::mint(token_address, migrator_address, rewards.migrator_reward);
         if (is_meme) {
             asset_manager::disable_minting(token_address);
+            asset_manager::destroy_mint_ref(token_address);
+            asset_manager::destroy_transfer_ref(token_address);
+            asset_manager::destroy_burn_ref(token_address);
         } else {
             let token_obj = object::address_to_object<Metadata>(token_address);
             let dao_address_opt = petra::get_dao_for_token(token_obj);
@@ -258,7 +261,8 @@ module hoglet_core::migration {
             } else {
                 asset_manager::disable_minting(token_address);
 
-                // SECURITY FIX (M-01 & M-07): Destroy leftover capabilities for meme coins too
+                // SECURITY FIX (M-01 & M-07): Destroy leftover capabilities
+                asset_manager::destroy_mint_ref(token_address);
                 asset_manager::destroy_transfer_ref(token_address);
                 asset_manager::destroy_burn_ref(token_address);
             }
