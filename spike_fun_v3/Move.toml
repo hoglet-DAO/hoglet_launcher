@@ -5,9 +5,8 @@ authors = []
 
 [addresses]
 
-MIDNIGHT = "0x82dcc62b372e61925eeb610d281ea7e6163dd61c10bb16cce8c32d65ef41ace1"
-hoglet_core = "0x82dcc62b372e61925eeb610d281ea7e6163dd61c10bb16cce8c32d65ef41ace1"
-lp_treasury = "0x82dcc62b372e61925eeb610d281ea7e6163dd61c10bb16cce8c32d65ef41ace1"
+MIDNIGHT = "0xa6df8835a9ff8f3f84e7a5997547f83dc6fb0e805706c51035f82fdd685d3567"
+hoglet_core = "0xa6df8835a9ff8f3f84e7a5997547f83dc6fb0e805706c51035f82fdd685d3567"
 
 [dev-addresses]
 
