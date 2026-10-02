@@ -5,8 +5,8 @@ authors = []
 
 [addresses]
 
-MIDNIGHT = "0xa6df8835a9ff8f3f84e7a5997547f83dc6fb0e805706c51035f82fdd685d3567"
-hoglet_core = "0xa6df8835a9ff8f3f84e7a5997547f83dc6fb0e805706c51035f82fdd685d3567"
+HOPE = "0x9a63b4ff0e6ec6cefa033bd323bd2ea6f6cf2a3c580ae5ba076f087c7d12ec53"
+hoglet_core = "0x9a63b4ff0e6ec6cefa033bd323bd2ea6f6cf2a3c580ae5ba076f087c7d12ec53"
 
 [dev-addresses]
 
@@ -23,7 +23,7 @@ subdir = "aptos-move/framework/aptos-token"
 [dependencies.buffer]
 git = "https://github.com/hoglet-DAO/Buffer_contracts.git"
 rev = "main"
-subdir = "testnet"
+subdir = "mainnet"
 
 [dependencies.hoglet_dao]
 local = "../dao_factory"
