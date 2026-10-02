@@ -1,0 +1,38 @@
+[package]
+name = "hoglet_core"
+version = "1.0.0"
+authors = []
+
+[addresses]
+
+HOPE = "0x9a63b4ff0e6ec6cefa033bd323bd2ea6f6cf2a3c580ae5ba076f087c7d12ec53"
+hoglet_core = "0x9a63b4ff0e6ec6cefa033bd323bd2ea6f6cf2a3c580ae5ba076f087c7d12ec53"
+
+[dev-addresses]
+
+[dependencies.SupraFramework]
+git = "https://github.com/Entropy-Foundation/aptos-core.git"
+rev = "dev"
+subdir = "aptos-move/framework/supra-framework"
+
+[dependencies.AptosToken]
+git = "https://github.com/Entropy-Foundation/aptos-core.git"
+rev = "dev"
+subdir = "aptos-move/framework/aptos-token"
+
+[dependencies.buffer]
+git = "https://github.com/hoglet-DAO/Buffer_contracts.git"
+rev = "main"
+subdir = "mainnet"
+
+[dependencies.hoglet_dao]
+local = "../dao_factory"
+
+[dependencies.amm]
+local = "../amm"
+
+[dependencies.hodl]
+local = "../hodl"
+
+[dev-dependencies]
+
