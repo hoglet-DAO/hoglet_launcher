@@ -20,7 +20,7 @@ module hoglet_core::hoglet_core {
     use hoglet_core::migration;
     use hoglet_hodl::hodl_fa;
     use dao_factory::petra;
-    use dao_factory::tax_router;
+    use dao_tax_router::tax_router;
     use dao_tokens::smart_token;
     use spike_amm::amm_router;
     use spike_amm::amm_pair;
