@@ -18,7 +18,7 @@ module hoglet_core::migration {
     use hoglet_buffer::manager;
     friend hoglet_core::hoglet_core;
     use dao_factory::petra;
-    use dao_factory::tax_router;
+    use dao_tax_router::tax_router;
     use dao_factory::zeal;
     use dao_factory::restore;
     use dao_factory::legacy;
