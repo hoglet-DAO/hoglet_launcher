@@ -8,7 +8,7 @@ module hoglet_core::pool {
     // custody its routes via the dao_tax_router of its own DAO (bypass of
     // its hooks with its TaxFreeCap - audit9 H-2, audit10 C3).
     use dao_factory::petra;
-    use dao_factory::tax_router;
+    use dao_tax_router::tax_router;
     use hoglet_core::asset_manager;
 
     friend hoglet_core::hoglet_core;
