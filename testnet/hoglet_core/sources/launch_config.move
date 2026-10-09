@@ -96,12 +96,12 @@ module hoglet_core::launch_config {
         move_to(
             admin,
             PumpConfig {
-                admin_address: address_of(admin),
+                admin_address: @HOGLET,
                 creator_fee_bps: 13, //0.13% creator fee
                 platform_fee: 17, //0.17% platform fee (much lower)
                 deploy_fee: 137 * DECIMALS, //137 SUPRA deploy fee (~$0.02)
-                platform_fee_address: address_of(admin),
-                benefitiary_address_for_excess: address_of(admin),
+                platform_fee_address: @HOGLET,
+                benefitiary_address_for_excess: @HOGLET,
                 resource_cap: signer_cap,
                 staking_rate: 1370,
                 raise_limit_min: 37_137_137_000_000, //371,371.37 SUPRA (~$78 USD)
