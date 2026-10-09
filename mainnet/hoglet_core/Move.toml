@@ -31,7 +31,7 @@ rev = "main"
 subdir = "mainnet/dao_factory"
 
 [dependencies.amm]
-git = "https://github.com/hoglet-DAO/DAO_contracts.git"
+git = "https://github.com/hoglet-DAO/amm_contracts.git"
 rev = "main"
 subdir = "mainnet/amm"
 
