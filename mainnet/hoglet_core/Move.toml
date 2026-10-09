@@ -33,7 +33,7 @@ subdir = "mainnet/dao_factory"
 [dependencies.amm]
 git = "https://github.com/hoglet-DAO/amm_contracts.git"
 rev = "main"
-subdir = "mainnet/amm"
+subdir = "mainnet"
 
 [dependencies.hodl]
 git = "https://github.com/hoglet-DAO/hoglet_launcher.git"
