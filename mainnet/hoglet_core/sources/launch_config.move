@@ -11,7 +11,7 @@ module hoglet_core::launch_config {
     use supra_framework::fungible_asset::{Self, Metadata};
     // [V3-TAX-AWARE] Detector de tokens smart (launcher-launched) con TaxFreeCap
     use dao_factory::petra;
-    use dao_factory::tax_router;
+    use dao_tax_router::tax_router;
     // v3: SUPRA pivot via the AMM's TWAP oracle (one-shot at quote registration).
     use spike_amm::amm_oracle;
 
