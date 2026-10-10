@@ -96,12 +96,12 @@ module hoglet_core::launch_config {
         move_to(
             admin,
             PumpConfig {
-                admin_address: @HOGLET,
+                admin_address: @HOG,
                 creator_fee_bps: 13, //0.13% creator fee
                 platform_fee: 17, //0.17% platform fee (much lower)
                 deploy_fee: 137 * DECIMALS, //137 SUPRA deploy fee (~$0.02)
-                platform_fee_address: @HOGLET,
-                benefitiary_address_for_excess: @HOGLET,
+                platform_fee_address: @HOG,
+                benefitiary_address_for_excess: @HOG,
                 resource_cap: signer_cap,
                 staking_rate: 1370,
                 raise_limit_min: 37_137_137_000_000, //371,371.37 SUPRA (~$78 USD)
@@ -489,7 +489,7 @@ module hoglet_core::launch_config {
                 // store owned by the admin. ANY registered dispatch function (deposit
                 // or withdraw) rejects the quote. One cheap admin tx per registration;
                 // the probe objects are inert dust afterwards.
-                let probe_constr = object::create_object_from_object(admin);
+                let probe_constr = object::create_object_from_account(admin);
                 let probe_store = fungible_asset::create_store(&probe_constr, metadata);
                 assert!(
                     !fungible_asset::is_store_dispatchable(probe_store),

@@ -5,8 +5,8 @@ authors = []
 
 [addresses]
 
-HOGLET = "0x17aecc0a267c77a70f51db8070f504bce55d64de886e675b52bd9143729897d9"
-hoglet_core = "0x5d660f79970951e2e375e05b437cba455b2d60fc440ddd70d87db464a44a91d5"
+HOG = "0x3ec6be8be7d00c5e778a76ea9a3cf8650ccb7cb0e6fcce36653beed63198cc9f"
+hoglet_core = "0x0d6be8c7019e2fd473233437665e44e16967b5f4aa8ce8a991aa8c7b5e406da4"
 
 [dev-addresses]
 
