@@ -59,9 +59,9 @@ module hoglet_hodl::hodl_fa_config {
         assert!(admin_addr == @hoglet_hodl, error::permission_denied(ERR_NO_PERMISSIONS));
 
         move_to(admin, GlobalConfig {
-            emergency_admin_address: @HOG,
-            treasury_admin_address: @HOG,
-            fee_treasury_address: @HOG,
+            emergency_admin_address: @FACTORY,
+            treasury_admin_address: @FACTORY,
+            fee_treasury_address: @FACTORY,
             global_emergency_locked: false,
             treasury_withdraw_grace_period_seconds: 7257600,
             pool_registration_fee_amount: 137_000_000,
@@ -69,7 +69,7 @@ module hoglet_hodl::hodl_fa_config {
         });
 
         move_to(admin, AdminConfig {
-            current_admin: @HOG,
+            current_admin: @FACTORY,
         });
     }
 
