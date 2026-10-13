@@ -6,7 +6,7 @@ authors = []
 [addresses]
 
 FACTORY = "0x6e3e09ab7fd0145d7befc0c68d6944ddc1a90fd45b8a6d28c76d8c48bed676b0"
-hoglet_core = "0xb03d804c616284b62d7c2ac21609f2550ab569d6fcc55978ac47319fe422b2e6"
+hoglet_core = "0x934b2fcbfae5284bed4c237c5289a5e77925a1bf6b137eeeb0694916d671c5d6"
 
 [dev-addresses]
 
