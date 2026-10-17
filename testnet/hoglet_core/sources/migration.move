@@ -94,7 +94,7 @@ module hoglet_core::migration {
         is_meme: bool
     ): (u64, MigrationRewards) {
         let (v_quote, v_token) = pool::get_snapshots(pool_address);
-        let (initial_v_quote, initial_v_token) = pool::get_initial_reserves(pool_address);
+        let (initial_v_token, initial_v_quote) = pool::get_initial_reserves(pool_address);
         let target = pool::get_target_threshold(pool_address);
         let raising_percent = pool::get_raising_percent(pool_address);
 
@@ -208,6 +208,9 @@ module hoglet_core::migration {
 
                     // Exempt the DAO itself
                     smart_token::set_exemption(token_address, resource_signer, dao_address, true);
+
+                    // [V4-10] Exempt the resource account (launcher)
+                    smart_token::set_exemption(token_address, resource_signer, address_of(resource_signer), true);
 
                     // Exempt all initial Gauges
                     let gauge_count = zeal::get_gauge_count(dao_address);
@@ -339,23 +342,25 @@ module hoglet_core::migration {
         // precondition is verified upfront; ANY failure selects the canonical
         // bwsup path (fail-open, never blocking, retryable semantics).
         let is_supra_quote = launch_config::is_supra_native_fa(quote_address);
-        let buffer_route_available = if (is_supra_quote && launch_config::is_buffer_enabled()) {
-            let iasset_quote_address = launch_config::get_buffer_iasset_address();
-            if (iasset_quote_address == @0x0) {
-                false
-            } else {
-                let iasset_obj_probe = object::address_to_object<Metadata>(iasset_quote_address);
-                manager::is_whitelisted(resource_addr)
-                    && !manager::is_paused()
-                    && manager::get_available_iasset_stock(iasset_obj_probe) >= quote_value_for_amm
-            }
+        let pool_buffer_opt = pool::get_buffer_iasset(pool_address);
+        // Solo se permite la ruta buffer si ESTE pool fue registrado con buffer en su deploy Y el buffer sigue habilitado
+        let buffer_route_available = if (
+            is_supra_quote 
+            && option::is_some(&pool_buffer_opt) 
+            && launch_config::is_buffer_enabled()
+        ) {
+            let iasset_quote_address = *option::borrow(&pool_buffer_opt);
+            let iasset_obj_probe = object::address_to_object<Metadata>(iasset_quote_address);
+            manager::is_whitelisted(resource_addr)
+                && !manager::is_paused()
+                && manager::get_available_iasset_stock(iasset_obj_probe) >= quote_value_for_amm
         } else {
             false
         };
 
         let seeded_pool: address;
         let iasset_route_info: option::Option<address> = if (buffer_route_available) {
-            let iasset_quote_address = launch_config::get_buffer_iasset_address();
+            let iasset_quote_address = *option::borrow(&pool_buffer_opt);
             let pair_quote_obj = object::address_to_object<Metadata>(iasset_quote_address);
             seeded_pool = amm_pair::liquidity_pool_address(token_obj, pair_quote_obj);
             option::some(iasset_quote_address)

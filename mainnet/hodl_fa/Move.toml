@@ -5,8 +5,8 @@ authors = []
 
 [addresses]
 
-FACTORY = "0x6e3e09ab7fd0145d7befc0c68d6944ddc1a90fd45b8a6d28c76d8c48bed676b0"
-hoglet_hodl = "0xb03d804c616284b62d7c2ac21609f2550ab569d6fcc55978ac47319fe422b2e6"
+HOGL = "0x2ff2ca7683cde2e2d4acb53c3e1c52114b4f8a80a86bac2a065a6d487436ac1d"
+hoglet_hodl = "0x88aea8365bb06baea79e29375b64b9684b033768ec45483ee23a506be66bbdd4"
 
 [dev-addresses]
 

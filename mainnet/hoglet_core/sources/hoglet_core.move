@@ -191,6 +191,16 @@ module hoglet_core::hoglet_core {
         let token_obj = object::address_to_object<Metadata>(token_address);
         petra::claim_token_for_launcher(&resource_signer, token_obj);
 
+        // Determinar si aplica el buffer para este pool específico
+        let buffer_iasset_opt = if (
+            launch_config::is_supra_native_fa(quote_address) && launch_config::get_buffer_iasset_address() != @0x0
+        ) {
+            let addr = launch_config::get_buffer_iasset_address();
+            if (addr != @0x0) { option::some(addr) } else { option::none() }
+        } else {
+            option::none()
+        };
+
         let pool_address = pool::create_pool(
             &resource_signer,
             token_address,
@@ -202,7 +212,8 @@ module hoglet_core::hoglet_core {
             launch_config::get_quote_min_trade_amount(quote_address),
             percentage_reward_bps,
             sender,
-            is_meme
+            is_meme,
+            buffer_iasset_opt
         );
 
         // [FIX (audit13 R-2)] Cross-launch whitelist: when the QUOTE is an
@@ -259,22 +270,15 @@ let final_unstake_period = if (unstake_period_seconds > 0) {
         // the buffer-route migration aborts with GAUGE_NOT_FOUND (the gauge for
         // the iasset pool never existed). Both gauges are born inactive and the
         // migration activates the seeded one exacatly the v2 semantic.
-        let buffer_pair_pool_address: option::Option<address> = if (
-            launch_config::is_supra_native_fa(quote_address) && launch_config::is_buffer_enabled()
-        ) {
-            let iasset_quote_address = launch_config::get_buffer_iasset_address();
-            // 0x0 means "no target configured": the gate rejects address 0x0.
-            if (iasset_quote_address != @0x0) {
-                amm_router::create_locked_pair_for_launchpad(
-                    &resource_signer,
-                    token_address,
-                    iasset_quote_address,
-                );
-                let iasset_pair_obj = object::address_to_object<Metadata>(iasset_quote_address);
-                std::option::some(amm_pair::liquidity_pool_address(token_obj, iasset_pair_obj))
-            } else {
-                std::option::none()
-            }
+        let buffer_pair_pool_address: option::Option<address> = if (option::is_some(&buffer_iasset_opt)) {
+            let iasset_quote_address = *option::borrow(&buffer_iasset_opt);
+            amm_router::create_locked_pair_for_launchpad(
+                &resource_signer,
+                token_address,
+                iasset_quote_address,
+            );
+            let iasset_pair_obj = object::address_to_object<Metadata>(iasset_quote_address);
+            std::option::some(amm_pair::liquidity_pool_address(token_obj, iasset_pair_obj))
         } else {
             std::option::none()
         };

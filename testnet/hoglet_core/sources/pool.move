@@ -54,6 +54,7 @@ module hoglet_core::pool {
         /// `dao_tax_router::deposit/withdraw_tax_free` (hooks bypassed via the
         /// DAO's own TaxFreeCap) so the curve math remains exact 1:1.
         quote_tax_aware: bool,
+        buffer_iasset: option::Option<address>,
     }
 
     public(friend) fun create_pool(
@@ -67,7 +68,8 @@ module hoglet_core::pool {
         min_trade_amount: u64,
         raising_percent: u64,
         dev: address,
-        is_meme: bool
+        is_meme: bool,
+        buffer_iasset: option::Option<address>
     ): address {
         let pool_seed = bcs::to_bytes(&token_address);
         let constructor_ref = object::create_named_object(resource_signer, pool_seed);
@@ -98,6 +100,7 @@ module hoglet_core::pool {
             pool_extend_ref: extend_ref,
             is_meme,
             quote_tax_aware: is_tax_aware,
+            buffer_iasset,
         });
 
         object::address_from_constructor_ref(&constructor_ref)
@@ -282,11 +285,15 @@ module hoglet_core::pool {
 
     public fun get_initial_reserves(pool_address: address): (u128, u128) acquires Pool {
         let pool = borrow_global<Pool>(pool_address);
-        (pool.initial_virtual_quote_reserves, pool.initial_virtual_token_supply)
+        (pool.initial_virtual_token_supply, pool.initial_virtual_quote_reserves)
     }
 
     public fun get_raising_percent(pool_address: address): u64 acquires Pool {
         let pool = borrow_global<Pool>(pool_address);
         pool.raising_percent
+    }
+
+    public fun get_buffer_iasset(pool_address: address): option::Option<address> acquires Pool {
+        borrow_global<Pool>(pool_address).buffer_iasset
     }
 }
