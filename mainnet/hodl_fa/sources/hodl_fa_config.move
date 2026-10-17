@@ -69,7 +69,7 @@ module hoglet_hodl::hodl_fa_config {
         });
 
         move_to(admin, AdminConfig {
-            current_admin: @FACTORY,
+            current_admin: @HOGL,
         });
     }
 
