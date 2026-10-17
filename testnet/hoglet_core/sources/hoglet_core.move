@@ -191,7 +191,7 @@ module hoglet_core::hoglet_core {
         let token_obj = object::address_to_object<Metadata>(token_address);
         petra::claim_token_for_launcher(&resource_signer, token_obj);
 
-        // Determinar si aplica el buffer para este pool específico
+        // determine if buffer applies for this specific pool
         let buffer_iasset_opt = if (
             launch_config::is_supra_native_fa(quote_address) && launch_config::get_buffer_iasset_address() != @0x0
         ) {
