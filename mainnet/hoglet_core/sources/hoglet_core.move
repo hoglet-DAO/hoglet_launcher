@@ -193,6 +193,7 @@ module hoglet_core::hoglet_core {
 
         // determine if buffer applies for this specific pool
         let buffer_iasset_opt = if (
+            launch_config::is_buffer_enabled() &&
             launch_config::is_supra_native_fa(quote_address) && launch_config::get_buffer_iasset_address() != @0x0
         ) {
             let addr = launch_config::get_buffer_iasset_address();
@@ -670,13 +671,18 @@ let final_unstake_period = if (unstake_period_seconds > 0) {
         // are off (received == total_cost_u128); with taxes active the user
         // receives the honest curve-equivalent of what landed.
         let received_quote = fungible_asset::amount(&total_quote_asset);
-        let platform_fee_actual = aptos_std::math128::mul_div((received_quote as u128), (platform_fee_bps as u128), 10000);
-        let creator_fee_actual = aptos_std::math128::mul_div((received_quote as u128), (creator_fee_bps as u128), 10000);
-        let pool_input_actual = received_quote - (platform_fee_actual as u64) - (creator_fee_actual as u64);
+        let (platform_fee_actual, creator_fee_actual, pool_input_actual) = if (received_quote == total_cost_u64) {
+            ((platform_fee_u128 as u64), (creator_fee_u128 as u64), (liquidity_cost_u128 as u64))
+        } else {
+            let p_fee = aptos_std::math128::mul_div((received_quote as u128), (platform_fee_bps as u128), 10000);
+            let c_fee = aptos_std::math128::mul_div((received_quote as u128), (creator_fee_bps as u128), 10000);
+            let p_in = received_quote - (p_fee as u64) - (c_fee as u64);
+            ((p_fee as u64), (c_fee as u64), p_in)
+        };
         assert!(pool_input_actual > 0, error::invalid_argument(ERROR_AMOUNT_TOO_LOW));
 
-        let platform_fee_asset = fungible_asset::extract(&mut total_quote_asset, (platform_fee_actual as u64));
-        let creator_fee_asset = fungible_asset::extract(&mut total_quote_asset, (creator_fee_actual as u64));
+        let platform_fee_asset = fungible_asset::extract(&mut total_quote_asset, platform_fee_actual);
+        let creator_fee_asset = fungible_asset::extract(&mut total_quote_asset, creator_fee_actual);
 
         distribute_quote_fees_internal(
             pool_address,

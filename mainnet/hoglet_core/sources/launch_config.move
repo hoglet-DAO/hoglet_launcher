@@ -491,10 +491,11 @@ module hoglet_core::launch_config {
                 // the probe objects are inert dust afterwards.
                 let probe_constr = object::create_object_from_account(admin);
                 let probe_store = fungible_asset::create_store(&probe_constr, metadata);
-                assert!(
-                    !fungible_asset::is_store_dispatchable(probe_store),
-                    error::invalid_argument(ERROR_QUOTE_HAS_HOOKS)
-                );
+                let is_dispatchable = fungible_asset::is_store_dispatchable(probe_store);
+                let delete_ref = object::generate_delete_ref(&probe_constr);
+                fungible_asset::remove_store(&delete_ref);
+                object::delete(delete_ref);
+                assert!(!is_dispatchable, error::invalid_argument(ERROR_QUOTE_HAS_HOOKS));
             };
         };
     }
@@ -509,11 +510,11 @@ module hoglet_core::launch_config {
         let tokens_per_sup_u256 = (config.tokens_per_sup as u256);
         // pow(10, dec) fits u128 for any feasible FA decimals (<= 32 = 10^32 < u128 max);
         // constants are only widened here. Divisors are >= 1: pow(10, 0) = 1, price > 0.
-        let token_dec_factor_u256 = (math128::pow((10 as u128), (config.token_decimals as u128)) as u256);
+        let _token_dec_factor_u256 = (math128::pow((10 as u128), (config.token_decimals as u128)) as u256);
         let quote_dec_factor_u256 = (math128::pow((10 as u128), (fungible_asset::decimals(quote_obj) as u128)) as u256);
 
         // whole tokens / whole quote = token_raw-per-supra_raw * supra_raw-per-whole-quote / 10^token_dec
-        let price_ratio_whole_u256 = tokens_per_sup_u256 * supra_per_quote_u256 / token_dec_factor_u256;
+        let price_ratio_whole_u256 = tokens_per_sup_u256 * supra_per_quote_u256 / (SUPRA_RAW_PER_WHOLE as u256);
         assert!(price_ratio_whole_u256 > 0, error::invalid_state(ERROR_QUOTE_NO_ORACLE));
         assert!(price_ratio_whole_u256 <= (U64_MAX_AS_U128 as u256), error::invalid_state(ERROR_QUOTE_INVALID_PARAMS));
 
@@ -526,6 +527,7 @@ module hoglet_core::launch_config {
         // quote raw raise bounds must be representable. Too-cheap tokens' raises
         // explode past u64 abort with a dedicated error instead of truncating.
         assert!(raising_max_u256 <= (U64_MAX_AS_U128 as u256), error::invalid_state(ERROR_QUOTE_RAISE_EXCEEDS_U64));
+        assert!(raising_max_u256 <= 10_000_000_000_000_000, error::invalid_state(ERROR_QUOTE_RAISE_EXCEEDS_U64));
         assert!(raising_min_u256 > 0, error::invalid_state(ERROR_QUOTE_INVALID_PARAMS));
         assert!(min_trade_u256 > 0, error::invalid_state(ERROR_QUOTE_INVALID_PARAMS));
 

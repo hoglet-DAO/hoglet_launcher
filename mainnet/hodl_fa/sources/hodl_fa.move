@@ -671,7 +671,7 @@ module hoglet_hodl::hodl_fa {
 
         user_stake.earned_reward = 0;
 
-        let should_cleanup = (user_stake.amount == 0);
+        let should_cleanup = (user_stake.amount == 0 && option::is_none(&user_stake.nft));
 
         let withdrawn_rewards_from_pool = fungible_asset::withdraw(&resource_signer, pool.reward_store, amount_to_harvest);
         event::emit(HarvestEvent { 
@@ -806,6 +806,7 @@ module hoglet_hodl::hodl_fa {
                             continue
                         };
 
+                        update_stake_seconds(pool, user_addr);
                         update_accum_reward(pool);
 
                         let user_stake = table::borrow_mut(&mut pool.stakes, user_addr);
@@ -960,6 +961,7 @@ module hoglet_hodl::hodl_fa {
 
                 if (amount_to_unstake > 0) {
                     update_accum_reward(pool);
+                    update_stake_seconds(pool, user_addr);
                     
                     let pool_unstake_period = pool.unstake_period_seconds;
                     let user_stake = table::borrow_mut(&mut pool.stakes, user_addr);
@@ -1068,7 +1070,7 @@ module hoglet_hodl::hodl_fa {
                         fungible_asset::deposit(user_primary_reward_store, withdrawn_rewards);
 
                         // Check if cleanup is needed after harvest.
-                        let should_cleanup = (user_stake.amount == 0);
+                        let should_cleanup = (user_stake.amount == 0 && option::is_none(&user_stake.nft));
 
                         event::emit(HarvestEvent { 
                             user_address: user_addr, 
@@ -1375,10 +1377,10 @@ module hoglet_hodl::hodl_fa {
             reward_addr
         );
         let resource_addr = get_module_resource_address();
-        let pools_manager = borrow_global<PoolsManager>(resource_addr);
         if (!exists<PoolsManager>(resource_addr)) {
             return false
         };
+        let pools_manager = borrow_global<PoolsManager>(resource_addr);
         if (!table::contains(&pools_manager.pools, pool_key)) {
             return false
         };
@@ -1511,6 +1513,43 @@ module hoglet_hodl::hodl_fa {
         assert!(table::contains(&pool.stakes, user_addr), error::not_found(ERR_NO_STAKE));
 
         let user_stake = table::borrow(&pool.stakes, user_addr);
+
+        if (pool.is_hodl_pool) {
+            let user_acc_stake_seconds = user_stake.acc_stake_seconds;
+            let pool_accum_stake_seconds = pool.accum_stake_seconds;
+
+            let current_time = timestamp::now_seconds();
+            let effective_end = if (pool.stakes_closed && pool.end_timestamp > 0 && current_time > pool.end_timestamp) {
+                pool.end_timestamp
+            } else {
+                current_time
+            };
+
+            if (effective_end > user_stake.last_stake_seconds_updated) {
+                let elapsed = ((effective_end - user_stake.last_stake_seconds_updated) as u128);
+                let user_weight = user_stake_amount_with_boosted(user_stake);
+                let delta_stake_seconds = user_weight * elapsed;
+                user_acc_stake_seconds = user_acc_stake_seconds + delta_stake_seconds;
+            };
+
+            if (effective_end > pool.last_stake_seconds_updated) {
+                let elapsed = ((effective_end - pool.last_stake_seconds_updated) as u128);
+                let total_weight = pool_total_staked_with_boosted(pool);
+                let delta_pool_stake_seconds = total_weight * elapsed;
+                pool_accum_stake_seconds = pool_accum_stake_seconds + delta_pool_stake_seconds;
+            };
+
+            let pending = (user_stake.earned_reward as u128);
+            if (pool_accum_stake_seconds > 0 && pool.final_reward_amount > 0) {
+                let user_share = math128::mul_div(
+                    (pool.final_reward_amount as u128),
+                    user_acc_stake_seconds,
+                    pool_accum_stake_seconds
+                );
+                pending = pending + user_share;
+            };
+            return if (pending >= (MAX_U64 as u128)) { MAX_U64 } else { (pending as u64) }
+        };
         
         let current_pool_accum_reward = pool.accum_reward;
         let time_now_for_calc = get_time_for_last_update(pool);
@@ -1714,19 +1753,21 @@ module hoglet_hodl::hodl_fa {
             
             update_unlocked_balance(pool_unstake_period, user_stake);
             
+            let still_locked = if (user_stake.amount > user_stake.unlocked_balance) {
+                user_stake.amount - user_stake.unlocked_balance
+            } else { 0 };
+            let effective_prev_start = if (still_locked == 0 || current_time <= user_stake.locked_start_time) {
+                current_time
+            } else {
+                user_stake.locked_start_time
+            };
+
             user_stake.amount = user_stake.amount + stake_amount;
-            
-            let new_locked = user_stake.locked_amount + stake_amount;
+            let new_locked = still_locked + stake_amount;
             if (new_locked > 0) {
-                user_stake.locked_start_time = (math128::mul_div(
-                    (user_stake.locked_amount as u128),
-                    (user_stake.locked_start_time as u128),
-                    (new_locked as u128)
-                ) as u64) + (math128::mul_div(
-                    (stake_amount as u128),
-                    (current_time as u128),
-                    (new_locked as u128)
-                ) as u64);
+                let weighted_start = ((still_locked as u128) * (effective_prev_start as u128)
+                    + (stake_amount as u128) * (current_time as u128)) / (new_locked as u128);
+                user_stake.locked_start_time = (weighted_start as u64);
             } else {
                 user_stake.locked_start_time = current_time;
             };
@@ -1779,15 +1820,19 @@ module hoglet_hodl::hodl_fa {
     }
 
     public fun is_hodl_period_finished(
-        resource_addr: address,
+        _resource_addr: address,
         pool_key: PoolIdentifier
-    ): bool acquires PoolsManager {
-        let pools_manager = borrow_global<PoolsManager>(resource_addr);
+    ): bool acquires PoolsManager, ModuleSignerStorage {
+        let actual_resource = get_module_resource_address();
+        if (!exists<PoolsManager>(actual_resource)) {
+            return false
+        };
+        let pools_manager = borrow_global<PoolsManager>(actual_resource);
         if (!table::contains(&pools_manager.pools, pool_key)) {
             return false
         };
         let pool = table::borrow(&pools_manager.pools, pool_key);
-        is_finished_inner(pool)
+        timestamp::now_seconds() >= pool.end_timestamp + pool.unstake_period_seconds
     }
 
     fun is_finished_inner(pool: &StakePoolData): bool {
@@ -1883,14 +1928,18 @@ module hoglet_hodl::hodl_fa {
             ) as u64)
         };
 
-        let already_unlocked = user_stake.unlocked_balance + (user_stake.locked_amount - user_stake.amount);
-        let newly_unlocked = if (total_unlocked_should_be > already_unlocked) {
-            total_unlocked_should_be - already_unlocked
-        } else {
-            0
-        };
+        let currently_locked = if (user_stake.amount > user_stake.unlocked_balance) {
+            user_stake.amount - user_stake.unlocked_balance
+        } else { 0 };
+        let unlocked_from_current_tranche = if (user_stake.locked_amount > currently_locked) {
+            user_stake.locked_amount - currently_locked
+        } else { 0 };
+        let newly_unlocked = if (total_unlocked_should_be > unlocked_from_current_tranche) {
+            total_unlocked_should_be - unlocked_from_current_tranche
+        } else { 0 };
 
-        user_stake.unlocked_balance + newly_unlocked
+        let res = user_stake.unlocked_balance + newly_unlocked;
+        if (res > user_stake.amount) { user_stake.amount } else { res }
     }
 
     fun update_unlocked_balance(pool_unstake_period: u64, user_stake: &mut UserStake) {
@@ -1913,14 +1962,20 @@ module hoglet_hodl::hodl_fa {
             ) as u64)
         };
 
-        let already_unlocked = user_stake.unlocked_balance + (user_stake.locked_amount - user_stake.amount);
-        let newly_unlocked = if (total_unlocked_should_be > already_unlocked) {
-            total_unlocked_should_be - already_unlocked
-        } else {
-            0
-        };
+        let currently_locked = if (user_stake.amount > user_stake.unlocked_balance) {
+            user_stake.amount - user_stake.unlocked_balance
+        } else { 0 };
+        let unlocked_from_current_tranche = if (user_stake.locked_amount > currently_locked) {
+            user_stake.locked_amount - currently_locked
+        } else { 0 };
+        let newly_unlocked = if (total_unlocked_should_be > unlocked_from_current_tranche) {
+            total_unlocked_should_be - unlocked_from_current_tranche
+        } else { 0 };
 
         user_stake.unlocked_balance = user_stake.unlocked_balance + newly_unlocked;
+        if (user_stake.unlocked_balance > user_stake.amount) {
+            user_stake.unlocked_balance = user_stake.amount;
+        };
     }
 
     // Helper for HODL pools (Stake-Seconds logic)
@@ -1961,4 +2016,60 @@ module hoglet_hodl::hodl_fa {
             };
         };
     }
+
+    // =========================================================================
+    // Entry Function Wrappers (HIGH-11)
+    // =========================================================================
+
+    public entry fun emergency_unstake_entry(
+        user: &signer,
+        pool_creator_addr: address,
+        stake_addr: address,
+        reward_addr: address,
+    ) acquires PoolsManager, ModuleSignerStorage, UserPoolsTracker {
+        let pool_key = new_pool_identifier(pool_creator_addr, stake_addr, reward_addr);
+        let (_, fa_opt, nft_opt) = emergency_unstake(user, pool_key);
+        let user_addr = signer::address_of(user);
+        if (option::is_some(&fa_opt)) {
+            let fa = option::destroy_some(fa_opt);
+            let user_store = primary_fungible_store::ensure_primary_store_exists(user_addr, fungible_asset::metadata_from_asset(&fa));
+            fungible_asset::deposit(user_store, fa);
+        } else {
+            option::destroy_none(fa_opt);
+        };
+        if (option::is_some(&nft_opt)) {
+            let nft = option::destroy_some(nft_opt);
+            token::deposit_token(user, nft);
+        } else {
+            option::destroy_none(nft_opt);
+        };
+    }
+
+    public entry fun harvest_entry(
+        user: &signer,
+        pool_creator_addr: address,
+        stake_addr: address,
+        reward_addr: address,
+    ) acquires PoolsManager, ModuleSignerStorage, UserPoolsTracker {
+        let pool_key = new_pool_identifier(pool_creator_addr, stake_addr, reward_addr);
+        let (_, fa) = harvest(user, pool_key);
+        let user_addr = signer::address_of(user);
+        let user_store = primary_fungible_store::ensure_primary_store_exists(user_addr, fungible_asset::metadata_from_asset(&fa));
+        fungible_asset::deposit(user_store, fa);
+    }
+
+    public entry fun unstake_entry(
+        user: &signer,
+        pool_creator_addr: address,
+        stake_addr: address,
+        reward_addr: address,
+        amount: u64
+    ) acquires PoolsManager, ModuleSignerStorage {
+        let pool_key = new_pool_identifier(pool_creator_addr, stake_addr, reward_addr);
+        let fa = unstake(user, pool_key, amount);
+        let user_addr = signer::address_of(user);
+        let user_store = primary_fungible_store::ensure_primary_store_exists(user_addr, fungible_asset::metadata_from_asset(&fa));
+        fungible_asset::deposit(user_store, fa);
+    }
+
 }
